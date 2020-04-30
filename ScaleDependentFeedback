@@ -1,0 +1,124 @@
+#===============================================================================
+# Using data from Soetaert et al. (2016) Scientific Reports
+# Data can be found at: https://issues.pangaea.de/browse/PDI-22708
+# Visualize the cold-water coral scale-dependent feedback on organic matter deposition
+# A. van der Kaaden, November 2018
+#===============================================================================
+
+#===============================================================================
+# Haversine function to calculate distances on the globe.
+# It calculates the Euclidean distance between point A(lat1,lon1) and point B(lat2,lon2)
+haversine <- function(lat1, lon1, lat2, lon2)
+{
+  R    <- 6378.137 # Earth radius in km
+  dLat <- abs((lat2 - lat1))*pi/180
+  dLon <- abs((lon2 - lon1))*pi/180
+  a    <- sin(dLat/2)*sin(dLat/2) + cos(lat1*pi/180)*cos(lat2*pi/180)*sin(dLon/2)*sin(dLon/2)
+  c    <- 2*atan2(sqrt(a),sqrt(1-a))
+  d    <- R*c
+  return(d)
+}
+#=================================================================================
+
+# remove memory contents and read data
+rm(list = ls())
+load("Soetaert2016.rda")
+load("OMdeficit.rda")
+
+# Get array dimensions
+Size <- dim(DepoCor)
+
+# Get the coordinates of all cells with coral
+Coral_positions <- which(iscoral != 0, TRUE)
+
+# Prepare matrices to store the distances between all points on the grid and the (nearest) coral reef
+Distances <- array(0,dim=Size)
+DistX     <- array(0,dim=Size)
+DistY     <- array(0,dim=Size)
+MaxFlow   <- array(0,dim=Size)
+
+# Calculate the minimum or mean distance of each cell to corals using the haversine formula (provided above)
+for (x in 1:Size[1]){
+  for (y in 1:Size[2]){
+    Ds <- haversine(lat[y], lon[x], lat[Coral_positions[,2]], lon[Coral_positions[,1]])
+    # Minimum distance
+    Distances[x,y] <- min(Ds)
+    # Mean distance
+    #Distances[x,y] <- mean(Ds)
+    
+    CPX <- which(iscoral[,y] != 0, TRUE)
+    if (length(CPX) != 0){
+      DsX <- haversine(lat[y], lon[x], lat[y], lon[CPX])
+      # Minimum distance
+      DistX[x,y] <- min(DsX)
+      # Mean distance
+      #DistX[x,y] <- mean(DsX)
+      
+    } else {
+      DistX[x,y] <- NA
+    }
+    CPY <- which(iscoral[x,] != 0, TRUE)
+    if (length(CPY) != 0){
+      DsY <- haversine(lat[y], lon[x], lat[CPY], lon[x])
+      # Minimum distance
+      DistY[x,y] <- min(DsY)
+      # Mean distance
+      #DistY[x,y] <- mean(DsY)
+      
+    } else {
+      DistY[x,y] <- NA
+    }
+    MaxFlow[x,y] <- max(c(max(u_bot[x,y,]),max(v_bot[x,y,])))
+  }
+}
+
+# The effect of corals on deposition is the deposition with corals, minus the deposition when there are no corals
+# We multiply with 60*60*24 to go from 'per second' to 'per day' deposition values
+CoralEffect <- (DepoCor - DepoNocor)*60*60*24
+
+# We will be calculating averages for bands of 0.25m width
+Width       <- 0.25
+Band_widths <- seq(0, 10, by=Width)
+
+# Prepare matrices to calculate mean deposition per distance-band
+# We will also be calculating standard deviations and number of observations, for error bars
+Mean_CoralEffect  <- vector(mode="numeric", length(Band_widths)-1)
+SD_CoralEffect    <- vector(mode="numeric", length(Band_widths)-1)
+N_CoralEffect     <- vector(mode="numeric", length(Band_widths)-1)
+
+# Calculate the effect, SD, and N, for all bands
+for (i in 1:(length(Band_widths)-1)){
+  Elements            <- which((Distances>=Band_widths[i] & Distances<Band_widths[i+1]))
+  Mean_CoralEffect[i] <- mean(CoralEffect[Elements])
+  SD_CoralEffect[i]   <- sd(CoralEffect[Elements])
+  N_CoralEffect[i]    <- length(Elements)
+}
+
+# Visualizations
+X=Band_widths[1:length(Band_widths)-1]
+require(OceanView)
+Colormap <- colorRampPalette(c("gold","white","darkgreen"),bias=3.2)
+
+# The scale-dependent feedback on the map
+par(mfrow=c(3,2))
+image2D(CoralEffect, lon, lat, main="Effect of corals on deposition", xlab="longitude", ylab="latitude",
+        cex.lab=0.8,col=Colormap(n=140))
+contour(x=lon,y=lat,z=depth,nlevels=20,add=TRUE)
+
+#================================================================================
+# Function to create error bars
+error.bar <- function(x, y, upper, lower=upper, length=0.1, ...){
+  arrows(x, y+upper, x, y-lower, angle=90, code=3, length=length, ...)
+}
+#================================================================================
+
+# The size of the errorbars
+SE_CoralEffect <- SD_CoralEffect/sqrt(N_CoralEffect)
+NFCConfidence   <- (SD_CoralEffect*1.96)/10
+
+# Plotting bars with errorbars
+# Scale-dependent feedback diagram
+BP <- barplot(Mean_CoralEffect[1:10], names.arg=X[1:10], main="Scale-dependent feedback", ylim=c(-5,15), 
+              xlab="Distance from reef (km)", ylab="Coral effect on deposition (mmol/m2/day)", cex.lab=0.8,
+              beside=FALSE, las=1)
+error.bar(BP, Mean_CoralEffect[1:10], NFCConfidence[1:10])
