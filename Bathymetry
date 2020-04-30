@@ -1,0 +1,30 @@
+#===============================================================================
+# Based on example Rcode to read the Rdata file of the model output from 
+# Soetaert et al, 2016 - scientific reports
+# Karline Soetaert 01/feb/2017
+# Data can be found at: https://issues.pangaea.de/browse/PDI-22708
+#===============================================================================
+
+# make sure the current directory holds the data
+library(OceanView)
+
+# remove memory contents and read data
+rm(list = ls())
+load("Soetaert2016.rda")
+ls()
+dim(Depth)
+dim(OM)
+length(lon)
+length(lat)
+h_w <- Depth [,,1]
+DD <- dim(OM) 
+
+# plot bathymetry
+require(plot3D)
+# perspective plot - plotting itself is postponed
+M   <- persp3D(x = lon, y = lat, z = -h_w/1000,  colvar = NULL,
+          phi = 20, theta =0, bty = "b", cticktype = "detailed", 
+          expand = 0.25, col = "grey", shade = 0.5, 
+          xlab = "longitude",ylab="latitude", zlab = "depth", 
+          main = "", plot = FALSE)
+plotdev()
