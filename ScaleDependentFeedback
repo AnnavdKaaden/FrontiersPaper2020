@@ -28,6 +28,9 @@ load("OMdeficit.rda")
 # Get array dimensions
 Size <- dim(DepoCor)
 
+# Get depth
+depth <- Depth[,,1]
+
 # Get the coordinates of all cells with coral
 Coral_positions <- which(iscoral != 0, TRUE)
 
@@ -68,7 +71,6 @@ for (x in 1:Size[1]){
     } else {
       DistY[x,y] <- NA
     }
-    MaxFlow[x,y] <- max(c(max(u_bot[x,y,]),max(v_bot[x,y,])))
   }
 }
 
